@@ -1,0 +1,48 @@
+# The forbidigo rules are the real reason this file exists: they turn two house
+# invariants - only main exits, and nothing but results reaches stdout - from
+# README prose into a build failure. This codebase's central risk is a
+# credential reaching a string, and that class of mistake is mechanical.
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose        # a leaked response body on the Slack transport
+    - errorlint        # %v instead of %w silently breaks errors.Is on our sentinels
+    - errname          # enforces the Err*/*Error convention
+    - contextcheck     # every Slack call must carry the command's ctx
+    - noctx
+    - nilerr
+    - copyloopvar
+    - forcetypeassert
+    - gosec
+    - misspell
+    - unconvert
+    - usestdlibvars
+    - wastedassign
+    - forbidigo
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: '^fmt\.Print(f|ln)?$'
+          msg: "write through *output.Writer, or to the injected stderr; nothing but results may reach stdout"
+        - pattern: '^os\.Exit$'
+          msg: "only cmd/slk/main.go may exit; return an error instead"
+        - pattern: '^log\.(Print|Fatal|Panic)'
+          msg: "use the injected *slog.Logger"
+    gosec:
+      excludes:
+        # Reading and writing a path the user gave us is the entire job of the
+        # config package; there is no untrusted taint to launder here.
+        - G304
+        - G703
+  exclusions:
+    rules:
+      - path: 'cmd/slk/main\.go'
+        linters: [forbidigo]
+      - path: '_test\.go'
+        linters: [errcheck, forcetypeassert, gosec, forbidigo]
+
+formatters:
+  enable:
+    - gofmt

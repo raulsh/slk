@@ -1,0 +1,25 @@
+Package: slk
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: @ARCH@
+Maintainer: @MAINTAINER@
+Installed-Size: @SIZE@
+Homepage: https://github.com/raulsh/slk
+Description: Read your Slack from the command line, as you
+ slk reads Slack using the credentials your own browser already holds - an
+ xoxc web-client token paired with the xoxd session cookie - so it sees your
+ DMs, your private channels, your unread state and your search results, and
+ needs no workspace administrator to install anything.
+ .
+ It exists so an AI agent can shell out to a binary instead of driving a
+ browser. Output is shaped for a caller that pays per token: compact records
+ with names already resolved, one self-describing JSON envelope per command,
+ distinct exit codes per failure cause, and nothing but results on stdout.
+ There is also an interactive terminal browser for when a person would rather
+ look around.
+ .
+ This uses Slack's internal client API, which is undocumented and
+ unsupported: endpoints can change without notice, and the credentials expire
+ whenever the browser session rotates. Whether you may use it on a given
+ workspace is between you and that workspace's policy.

@@ -1,0 +1,53 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The tag is the single source of truth for the version, so a release
+      # can never disagree with what `slk version` reports.
+      - name: resolve the version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: test
+        run: go test ./...
+
+      - name: build the archives
+        run: make dist VERSION=${{ steps.version.outputs.version }}
+
+      # One pass per architecture. ARCH names the Debian package and GOARCH
+      # cross-compiles the binary inside it; the two must agree, so they are
+      # set together rather than derived from the build host.
+      - name: build the packages
+        run: |
+          make deb VERSION=${{ steps.version.outputs.version }} ARCH=amd64 GOARCH=amd64
+          make deb VERSION=${{ steps.version.outputs.version }} ARCH=arm64 GOARCH=arm64
+
+      - name: list what will be published
+        run: ls -l dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -1,0 +1,15 @@
+/bin/
+/build/
+/dist/
+/coverage.out
+*.test
+
+# Unlike the sibling project's tracked dev-config.yaml, a local config here
+# holds LIVE Slack session credentials. Nothing config-shaped is ever tracked;
+# use SLK_CONFIG=./local.yaml against a file matched below.
+/config.yaml
+*.local.yaml
+local-config.yaml
+
+# Scratch tree for local runs.
+/.dev/
