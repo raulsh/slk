@@ -41,7 +41,7 @@ func (g *globals) newSession() (*session, error) {
 		Cookie:       profile.Cookie.Reveal(),
 		CookieDS:     profile.CookieDS.Reveal(),
 		EnterpriseID: profile.EnterpriseID,
-	}, g.log)
+	}, g.log, g.env.slackOptions...)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/raulsh/slk/internal/errdefs"
@@ -191,6 +192,11 @@ func (g *globals) runMessages(cmd *cobra.Command, o *messagesOpts) error {
 	}
 
 	kept, dropped := filterMessages(all, o, s.client)
+	if len(o.from) > 0 {
+		before := len(kept)
+		kept = g.keepFrom(ctx, s, d, kept, o.from)
+		dropped.from = before - len(kept)
+	}
 	if dropped.any() {
 		g.log.Debug("filtered messages", "system", dropped.system, "bots", dropped.bots, "from", dropped.from)
 	}
@@ -382,11 +388,6 @@ func filterMessages(ms []output.Message, o *messagesOpts, c *slack.Client) ([]ou
 		self = id.UserID
 	}
 
-	wantFrom := map[string]bool{}
-	for _, f := range o.from {
-		wantFrom[strings.ToLower(strings.TrimPrefix(f, "@"))] = true
-	}
-
 	for _, m := range ms {
 		if !o.includeSystem && noiseSubtypes[m.Subtype] {
 			dropped.system++
@@ -396,14 +397,45 @@ func filterMessages(ms []output.Message, o *messagesOpts, c *slack.Client) ([]ou
 			dropped.bots++
 			continue
 		}
-		if len(wantFrom) > 0 {
-			if !wantFrom[strings.ToLower(m.UserName)] && !wantFrom[strings.ToLower(m.User)] {
-				dropped.from++
-				continue
-			}
-		}
 		_ = self
 		kept = append(kept, m)
 	}
 	return kept, dropped
+}
+
+// keepFrom applies --from. It takes every spelling --dm does - a handle,
+// display name, email or user id - plus the name an app posts under, so the
+// two flags never disagree about who someone is.
+//
+// It resolves the authors first: until then a person's message carries
+// nothing but a user id, so a handle could never match. finish then finds the
+// kept authors cached, and still renders only the messages that survive, which
+// keeps the envelope's names map to the ids that appear in the results.
+func (g *globals) keepFrom(ctx context.Context, s *session, d *resolve.Directory, ms []output.Message, from []string) []output.Message {
+	ids := make([]string, 0, len(ms))
+	for _, m := range ms {
+		ids = append(ids, m.User)
+	}
+	slices.Sort(ids)
+	if err := d.EnsureUsers(ctx, fetcher{s.client}, slices.Compact(ids)); err != nil {
+		g.log.Debug("could not resolve some authors", "error", err)
+	}
+
+	want := make(map[string]bool, len(from))
+	for _, f := range from {
+		want[strings.ToLower(strings.TrimPrefix(strings.TrimSpace(f), "@"))] = true
+	}
+	matches := func(name string) bool { return name != "" && want[strings.ToLower(name)] }
+
+	var kept []output.Message
+	for _, m := range ms {
+		names := []string{m.User, m.UserName}
+		if u, ok := d.Users[m.User]; ok {
+			names = append(names, u.Name, u.Display, u.Email)
+		}
+		if slices.ContainsFunc(names, matches) {
+			kept = append(kept, m)
+		}
+	}
+	return kept
 }
