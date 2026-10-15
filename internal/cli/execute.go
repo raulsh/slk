@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/raulsh/slk/internal/errdefs"
+	"github.com/raulsh/slk/internal/slack"
 	"golang.org/x/term"
 )
 
@@ -36,6 +37,12 @@ type Env struct {
 
 	Version string
 	Commit  string
+
+	// slackOptions configure the Slack client, which is how a test points a
+	// whole command at an httptest server. Unexported on purpose: anything
+	// that redirects the API base redirects the credentials with it, so no
+	// flag or environment variable may reach this.
+	slackOptions []slack.Option
 }
 
 func (e Env) withDefaults() Env {
