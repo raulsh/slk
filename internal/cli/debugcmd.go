@@ -114,6 +114,7 @@ at a terminal. Under --dry-run it is not called at all.`,
 var readVerbs = map[string]bool{
 	"list": true, "info": true, "history": true, "replies": true, "get": true,
 	"counts": true, "test": true, "userBoot": true, "conversations": true,
+	"getView": true,
 }
 
 // isReadMethod reports whether a method only reads, judged by its name - the

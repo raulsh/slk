@@ -68,14 +68,7 @@ func (c *Client) PostMessage(ctx context.Context, o PostOptions) (output.Message
 	if rm.ThreadTS == "" {
 		rm.ThreadTS = o.ThreadTS
 	}
-	m := rm.toOutput(channel, c.workspaceHost())
-	if m.ThreadTS != "" && m.ThreadTS != m.TS && m.Permalink != "" {
-		// A reply's permalink needs its thread to open in place. This is the
-		// form Slack itself emits, and the one ParsePermalink reads back -
-		// built by hand because url.Values would sort cid ahead of thread_ts.
-		m.Permalink += "?thread_ts=" + m.ThreadTS + "&cid=" + channel
-	}
-	return m, nil
+	return rm.toOutput(channel, c.workspaceHost()), nil
 }
 
 // ThreadRoot returns the ts of the thread a message belongs to, and in doing

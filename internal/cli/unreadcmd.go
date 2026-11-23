@@ -118,7 +118,7 @@ where present, are real.`,
 
 			if totals.ThreadUnread > 0 {
 				g.out.Warn(strings.TrimSpace(
-					"there are unread thread replies; `slk messages --all --unread --include-threads` fetches them"))
+					"there are unread thread replies; `slk threads --unread` reads them, old threads included"))
 			}
 			return g.out.Unreads(rows)
 		},

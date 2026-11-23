@@ -73,6 +73,7 @@ slk messages --channel eng --since 2d
 slk messages --dm @alice --since 7d
 slk messages --channel eng --on 2026-09-01
 slk thread https://acme.slack.com/archives/C0123/p1725806400123456
+slk threads --unread                 # new replies in every thread you follow
 slk search "deploy failed" --in '#eng' --since 7d
 slk users list --vip
 
@@ -82,6 +83,11 @@ slk browse                           # interactive, when you'd rather look aroun
 `unread` and `messages --unread` answer different questions and both are worth
 asking: the first is a one-screen summary of where to look, the second is the
 content. Reading never marks anything read.
+
+Thread replies are not part of a conversation's history, so `messages` cannot
+see a new reply on an old thread. `slk threads --unread` can: it reads Slack's
+own Threads view, the threads you started, replied to or followed, and returns
+each one with every reply you have not read.
 
 **VIPs.** If you have marked people VIP in Slack, `slk` reads that: `--vip` on
 `messages` keeps only their messages, `users list --vip` lists them without
@@ -148,7 +154,8 @@ slk react --remove "$permalink" eyes
 `channel`, `ts` and `thread_ts`, so an agent can answer anything it read:
 
 ```sh
-slk messages --channel eng --since 15m --json   # pick a result
+slk threads --unread --json                     # new replies in threads you follow
+slk messages --channel eng --since 15m --json   # or new messages in a channel
 slk send --thread "$permalink" --yes "on it"     # or: --channel "$channel" --thread "$ts"
 ```
 
@@ -269,3 +276,12 @@ real workspace — see the plan's spike list.)*
 - The `xoxd` cookie value is URL-encoded as the browser stores it, and re-encoding it corrupts it.
 - Token expiry is indistinguishable from a wrong token, so both get the same remediation.
 - `results` in a JSON envelope is always an array, including on failure.
+- The threads view (`subscriptions.thread.getView`) returns at most ten threads
+  per page, newest activity first. The next page is asked for with `current_ts`
+  set to the last thread's `latest_reply`; the response's `max_ts` is newer than
+  every thread on the page, and sending it back returns the same page again.
+- A thread whose replies are all read has `latest_reply` equal to `last_read`,
+  and carries no `unread_replies`.
+- *Not yet observed here, attested by prior art:* the view lists unread threads
+  before read ones. `slk threads --unread` stops at the first read thread
+  because of it, and keeps paging if a first page has none.

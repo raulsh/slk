@@ -337,6 +337,12 @@ func (rm rawMessage) toOutput(channel, host string) output.Message {
 	}
 	if host != "" && !ts.IsZero() {
 		m.Permalink = fmt.Sprintf("https://%s/archives/%s/%s", host, channel, ts.Permalink())
+		if rm.ThreadTS != "" && rm.ThreadTS != rm.TS {
+			// A reply opens in place only with its thread named. This is the
+			// form Slack itself emits and the one ParsePermalink reads back -
+			// built by hand because url.Values would sort cid first.
+			m.Permalink += "?thread_ts=" + rm.ThreadTS + "&cid=" + channel
+		}
 	}
 
 	for _, f := range rm.Files {
