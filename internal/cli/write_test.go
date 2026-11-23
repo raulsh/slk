@@ -50,6 +50,8 @@ func newFakeSlack(t *testing.T) *fakeSlack {
 			"users.info":            `{"ok":true,"user":{"id":"U444DDDDD","name":"alice"}}`,
 			"conversations.replies": `{"ok":true,"messages":[{"ts":"1725806300.000100","thread_ts":"1725806300.000100","reply_count":2}]}`,
 			"conversations.open":    `{"ok":true,"channel":{"id":"D999ZZZZZ"}}`,
+			"reactions.add":         `{"ok":true}`,
+			"reactions.remove":      `{"ok":true}`,
 			"chat.postMessage": `{"ok":true,"channel":"C111AAAAA","ts":"1725806400.123456",
 				"message":{"type":"message","user":"U999ZZZZZ","ts":"1725806400.123456"}}`,
 		},
@@ -81,6 +83,20 @@ func (f *fakeSlack) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(body))
+}
+
+// reply replaces the canned answer for one method.
+func (f *fakeSlack) reply(method, body string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replies[method] = body
+}
+
+// stall makes one method hang until the client gives up.
+func (f *fakeSlack) stall(method string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stalls[method] = true
 }
 
 func (f *fakeSlack) count(method string) int {
@@ -438,7 +454,7 @@ func TestSendDM(t *testing.T) {
 func TestSendTimeoutSaysTheMessageMayHaveLanded(t *testing.T) {
 	cfg := writeConfig(t, true)
 	f := newFakeSlack(t)
-	f.stalls["chat.postMessage"] = true
+	f.stall("chat.postMessage")
 
 	got := runAgainst(t, f, strings.NewReader(""), false,
 		"send", "--config", cfg, "--json", "--yes", "--timeout", "1s", "--channel", "general", "hi")
@@ -491,5 +507,153 @@ func TestSendConfirmsAtATerminal(t *testing.T) {
 				t.Errorf("stderr = %q, want the question naming the channel", got.stderr)
 			}
 		})
+	}
+}
+
+const testPermalink = "https://acme.slack.com/archives/C111AAAAA/p1725806400123456"
+
+// reactedEnvelope is the part of a react result the tests read.
+type reactedEnvelope struct {
+	OK      bool `json:"ok"`
+	Results []struct {
+		DryRun  bool   `json:"dry_run"`
+		Action  string `json:"action"`
+		Channel string `json:"channel"`
+		TS      string `json:"ts"`
+		Name    string `json:"name"`
+		Changed bool   `json:"changed"`
+	} `json:"results"`
+}
+
+func decodeReacted(t *testing.T, r result) reactedEnvelope {
+	t.Helper()
+	var env reactedEnvelope
+	if err := json.Unmarshal([]byte(r.stdout), &env); err != nil {
+		t.Fatalf("stdout is not JSON: %v (%q, stderr %q)", err, r.stdout, r.stderr)
+	}
+	if len(env.Results) != 1 {
+		t.Fatalf("results = %d, want 1 (stdout %q)", len(env.Results), r.stdout)
+	}
+	return env
+}
+
+// TestReactRefusesBeforeTheNetwork mirrors the send refusals: a bad
+// invocation, writes switched off, or nobody to consent all stop the command
+// before it asks Slack anything.
+func TestReactRefusesBeforeTheNetwork(t *testing.T) {
+	cases := []struct {
+		name        string
+		allowWrites bool
+		args        []string
+		want        int
+	}{
+		{"nothing", true, nil, errdefs.ExitUsage},
+		{"permalink alone", true, []string{testPermalink}, errdefs.ExitUsage},
+		{"channel and ts without emoji", true, []string{"general", "1725806400.123456"}, errdefs.ExitUsage},
+		{"pasted emoji", true, []string{testPermalink, "👍"}, errdefs.ExitUsage},
+		{"truncated ts", true, []string{"general", "1725806400", "eyes"}, errdefs.ExitUsage},
+		{"user id as channel", true, []string{"U444DDDDD", "1725806400.123456", "eyes"}, errdefs.ExitUsage},
+		{"permalink plus ts", true, []string{testPermalink, "1725806400.123456", "eyes"}, errdefs.ExitUsage},
+		{"too many", true, []string{"general", "1725806400.123456", "eyes", "tada"}, errdefs.ExitUsage},
+		{"writes disabled", false, []string{"--yes", testPermalink, "eyes"}, errdefs.ExitWriteRefused},
+		{"no terminal and no --yes", true, []string{testPermalink, "eyes"}, errdefs.ExitWriteRefused},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := writeConfig(t, tc.allowWrites)
+			f := newFakeSlack(t)
+			args := append([]string{"react", "--config", cfg}, tc.args...)
+
+			got := runAgainst(t, f, strings.NewReader(""), false, args...)
+			if got.code != tc.want {
+				t.Errorf("exit = %d, want %d (stderr: %s)", got.code, tc.want, got.stderr)
+			}
+			if n := f.total(); n != 0 {
+				t.Errorf("made %d requests, want none before refusing", n)
+			}
+		})
+	}
+}
+
+// TestReactAddsAndRemoves covers both directions and both target forms, with
+// the emoji normalised to the bare name Slack wants.
+func TestReactAddsAndRemoves(t *testing.T) {
+	cases := []struct {
+		name   string
+		args   []string
+		method string
+		action string
+	}{
+		{"permalink", []string{testPermalink, ":Eyes:"}, "reactions.add", "add"},
+		{"channel and ts", []string{"general", "p1725806400123456", "eyes"}, "reactions.add", "add"},
+		{"remove", []string{"--remove", testPermalink, "eyes"}, "reactions.remove", "remove"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := writeConfig(t, true)
+			f := newFakeSlack(t)
+			args := append([]string{"react", "--config", cfg, "--json", "--yes"}, tc.args...)
+
+			got := runAgainst(t, f, strings.NewReader(""), false, args...)
+			if got.code != errdefs.ExitOK {
+				t.Fatalf("exit = %d, want 0 (stderr: %s)", got.code, got.stderr)
+			}
+			form := f.last(t, tc.method)
+			if form.Get("channel") != "C111AAAAA" || form.Get("timestamp") != "1725806400.123456" || form.Get("name") != "eyes" {
+				t.Errorf("%s form = %v, want eyes on C111AAAAA 1725806400.123456", tc.method, form)
+			}
+			r := decodeReacted(t, got).Results[0]
+			if r.Action != tc.action || !r.Changed || r.DryRun {
+				t.Errorf("result = %+v, want a real %s that changed the message", r, tc.action)
+			}
+		})
+	}
+}
+
+// TestReactIsIdempotent: after a timeout an agent will retry, and finding the
+// reaction already there - or already gone - must read as success, not as a
+// failure that sends it looking for what went wrong.
+func TestReactIsIdempotent(t *testing.T) {
+	cases := []struct {
+		method string
+		reply  string
+		flags  []string
+	}{
+		{"reactions.add", `{"ok":false,"error":"already_reacted"}`, nil},
+		{"reactions.remove", `{"ok":false,"error":"no_reaction"}`, []string{"--remove"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method, func(t *testing.T) {
+			cfg := writeConfig(t, true)
+			f := newFakeSlack(t)
+			f.reply(tc.method, tc.reply)
+			args := append([]string{"react", "--config", cfg, "--json", "--yes"}, tc.flags...)
+			args = append(args, testPermalink, "eyes")
+
+			got := runAgainst(t, f, strings.NewReader(""), false, args...)
+			if got.code != errdefs.ExitOK {
+				t.Fatalf("exit = %d, want 0 (stderr: %s)", got.code, got.stderr)
+			}
+			if r := decodeReacted(t, got).Results[0]; r.Changed {
+				t.Errorf("changed = true, want false when the state already held")
+			}
+		})
+	}
+}
+
+// TestReactDryRunChangesNothing: the rehearsal resolves the target and stops.
+func TestReactDryRunChangesNothing(t *testing.T) {
+	cfg := writeConfig(t, true)
+	f := newFakeSlack(t)
+
+	got := runAgainst(t, f, strings.NewReader(""), false, "react", "--config", cfg, "--json", "--dry-run", "general", "1725806400.123456", "eyes")
+	if got.code != errdefs.ExitOK {
+		t.Fatalf("exit = %d, want 0 (stderr: %s)", got.code, got.stderr)
+	}
+	if n := f.count("reactions.add") + f.count("reactions.remove"); n != 0 {
+		t.Errorf("made %d reaction writes under --dry-run", n)
+	}
+	if r := decodeReacted(t, got).Results[0]; !r.DryRun || r.Channel != "C111AAAAA" {
+		t.Errorf("result = %+v, want a rehearsal aimed at C111AAAAA", r)
 	}
 }

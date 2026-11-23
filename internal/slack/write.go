@@ -3,6 +3,7 @@ package slack
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -135,4 +136,30 @@ func newClientMsgID() string {
 	b[6] = b[6]&0x0f | 0x40 // version 4
 	b[8] = b[8]&0x3f | 0x80 // RFC 4122 variant
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// React adds a reaction to a message, or removes one, and reports whether the
+// message changed.
+//
+// already_reacted and no_reaction mean the message is already in the state
+// asked for. That is the outcome the caller wanted, not a failure, and
+// treating it as success is what makes a retry after a timeout safe: unlike a
+// post, a reaction cannot land twice.
+func (c *Client) React(ctx context.Context, channel, ts, name string, remove bool) (bool, error) {
+	method := "reactions.add"
+	if remove {
+		method = "reactions.remove"
+	}
+	form := url.Values{}
+	form.Set("channel", channel)
+	form.Set("timestamp", ts)
+	form.Set("name", name)
+
+	if err := c.call(ctx, method, form, nil); err != nil {
+		if errors.Is(err, errNoChange) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
