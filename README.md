@@ -58,6 +58,24 @@ make deb            # dist/slk_<version>_<arch>.deb
 The package installs the binary plus bash, zsh and fish completions, and
 declares no dependencies — the binary is fully static.
 
+### The agent skill
+
+To teach a coding agent to use `slk`, install the skill in [`skills/slk`](skills/slk/SKILL.md)
+with the [`skills`](https://github.com/vercel-labs/skills) CLI:
+
+```sh
+npx skills add raulsh/slk -g        # for every project
+npx skills add raulsh/slk           # or for the current project only
+```
+
+It tells the agent which command answers which question, how to read the envelope, how to keep a
+pull small, and when to stop and hand a dead credential back to you. It works with Claude Code,
+Codex, Cursor and the other agents the `skills` CLI supports: `-a claude-code` targets one, `-y`
+skips the prompts, and `npx skills update` brings it up to date.
+
+The skill does not install `slk`, and it never fetches credentials: install the binary as above,
+and run `slk configure` yourself.
+
 ## Reading your Slack
 
 ```sh
