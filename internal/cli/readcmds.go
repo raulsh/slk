@@ -330,7 +330,11 @@ func newThreadCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "thread <channel> <ts> | <permalink>",
 		Short: "Show one thread",
-		Long: `Show a thread's replies.
+		Long: `Show a whole thread: its first message, then every reply.
+
+Any message of the thread names it - the first message or any reply - so a
+permalink copied from a reply shows the thread it belongs to, not the reply
+alone.
 
 The timestamp is accepted in every form you might be holding: the wire form
 1725806400.123456, the permalink form p1725806400123456, or a whole Slack
@@ -351,8 +355,13 @@ argument.`,
 			}
 
 			var channel, ts string
-			if ch, mts, _, err := resolve.ParsePermalink(args[0]); err == nil {
+			if ch, mts, root, err := resolve.ParsePermalink(args[0]); err == nil {
+				// A reply's permalink names its thread too; reading from there
+				// saves the second request below.
 				channel, ts = ch, mts
+				if root != "" {
+					ts = root
+				}
 			} else {
 				if len(args) != 2 {
 					return errdefs.Usagef("give a channel and a timestamp, or a single permalink")
@@ -373,6 +382,17 @@ argument.`,
 			})
 			if err != nil {
 				return err
+			}
+			// Asked for a reply's ts, conversations.replies answers with that
+			// reply alone - verified against a real workspace - so read the
+			// thread again from the root the reply names.
+			if len(ms) == 1 && ms[0].ThreadTS != "" && ms[0].ThreadTS != ms[0].TS {
+				ms, err = s.client.Replies(ctx, slack.RepliesOptions{
+					Channel: channel, ThreadTS: ms[0].ThreadTS, Limit: limit,
+				})
+				if err != nil {
+					return err
+				}
 			}
 
 			name, _ := d.Name(channel)

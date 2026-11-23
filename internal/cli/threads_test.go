@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -126,5 +127,46 @@ func TestThreadsListsFromTheViewAlone(t *testing.T) {
 	if env.Results[0].TS != "1725806300.000100" || env.Results[3].TS != "1725800000.000100" {
 		t.Errorf("order = %s ... %s, want the view's order, each thread root first",
 			env.Results[0].TS, env.Results[3].TS)
+	}
+}
+
+// TestThreadFromAReplyShowsTheWholeThread: asked for a reply's ts, Slack
+// answers with that reply alone. The permalinks `slk threads` hands out are
+// mostly replies', so `slk thread` must still show the thread they belong to.
+func TestThreadFromAReplyShowsTheWholeThread(t *testing.T) {
+	const reply = `{"ok":true,"messages":[
+		{"type":"message","user":"U444DDDDD","text":"five","ts":"1725806300.000500","thread_ts":"1725806300.000100"}]}`
+
+	cases := []struct {
+		name     string
+		args     []string
+		requests int
+	}{
+		{"reply permalink", []string{"https://acme.slack.com/archives/C111AAAAA/p1725806300000500"}, 2},
+		{"reply permalink naming its thread",
+			[]string{"https://acme.slack.com/archives/C111AAAAA/p1725806300000500?thread_ts=1725806300.000100&cid=C111AAAAA"}, 1},
+		{"channel and reply ts", []string{"general", "1725806300.000500"}, 2},
+		{"channel and root ts", []string{"general", "1725806300.000100"}, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := writeConfig(t, false)
+			f := newFakeSlack(t)
+			f.route("conversations.replies", func(form url.Values) string {
+				if form.Get("ts") == "1725806300.000100" {
+					return unreadThreadReplies
+				}
+				return reply
+			})
+			args := append([]string{"thread", "--config", cfg, "--json"}, tc.args...)
+
+			env := decodeThreads(t, runAgainst(t, f, strings.NewReader(""), false, args...))
+			if len(env.Results) != 4 || env.Results[0].TS != "1725806300.000100" {
+				t.Errorf("results = %+v, want the whole thread, root first", env.Results)
+			}
+			if n := f.count("conversations.replies"); n != tc.requests {
+				t.Errorf("made %d replies requests, want %d", n, tc.requests)
+			}
+		})
 	}
 }

@@ -30,6 +30,7 @@ type fakeSlack struct {
 	mu      sync.Mutex
 	calls   []fakeCall
 	replies map[string]string
+	routes  map[string]func(form url.Values) string
 	stalls  map[string]bool
 }
 
@@ -70,6 +71,9 @@ func (f *fakeSlack) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.calls = append(f.calls, fakeCall{method: method, form: r.PostForm})
 	body, ok := f.replies[method]
+	if fn, routed := f.routes[method]; routed {
+		body, ok = fn(r.PostForm), true
+	}
 	stall := f.stalls[method]
 	f.mu.Unlock()
 
@@ -91,6 +95,17 @@ func (f *fakeSlack) reply(method, body string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.replies[method] = body
+}
+
+// route answers one method from its request, for a test where the reply
+// depends on what was asked.
+func (f *fakeSlack) route(method string, fn func(form url.Values) string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.routes == nil {
+		f.routes = map[string]func(url.Values) string{}
+	}
+	f.routes[method] = fn
 }
 
 // stall makes one method hang until the client gives up.

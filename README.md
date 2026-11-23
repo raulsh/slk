@@ -282,6 +282,9 @@ real workspace — see the plan's spike list.)*
   every thread on the page, and sending it back returns the same page again.
 - A thread whose replies are all read has `latest_reply` equal to `last_read`,
   and carries no `unread_replies`.
+- `conversations.replies` asked for a reply's `ts` returns that reply alone,
+  with its `thread_ts`, not the thread. `slk thread` and `send --thread` read
+  from the root the reply names.
 - *Not yet observed here, attested by prior art:* the view lists unread threads
   before read ones. `slk threads --unread` stops at the first read thread
   because of it, and keeps paging if a first page has none.
