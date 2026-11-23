@@ -7,11 +7,13 @@ removed or changes meaning, while new fields can appear without a bump.
 ## Contents
 
 - [Envelope](#envelope)
-- [Message](#message) — `messages`, `thread`, `search`
+- [Message](#message) — `messages`, `thread`, `threads`, `search`
 - [Unread](#unread) — `unread`
 - [Conversation](#conversation) — `conversations list`
 - [User](#user) — `users info`, `users list`
 - [Identity](#identity) — `auth test`
+- [Sent](#sent) — `send`
+- [Reacted](#reacted) — `react`
 - [Exit codes](#exit-codes)
 
 ## Envelope
@@ -46,13 +48,14 @@ removed or changes meaning, while new fields can appear without a bump.
 | `text_rendered` | The same text with references resolved to names. Present only when it differs from `text`. |
 | `thread_ts` | On a thread message, the parent's `ts`. |
 | `reply_count` | On a thread parent, the number of replies. |
-| `unread` | Fetched by an `--unread` run. |
+| `unread` | Not yet read by the user: set by an `--unread` run, and on the replies `threads` returns past the read marker. |
+| `has_new_replies` | On a thread's first message: the thread has replies newer than the user's read marker. |
 | `edited` | The message was edited. |
 | `subtype` | Slack's subtype, such as `thread_broadcast` or `file_share`. |
 | `files` | `[{id, name, type, size, title}]`, metadata only. |
 | `reactions` | `[{name, count}]`. |
 | `attachment_count` | Legacy attachments are present; their content is only under `--raw`. |
-| `permalink` | A link that opens the message in Slack. |
+| `permalink` | A link that opens the message in Slack — a reply's opens in its thread. `slk send --thread` takes it. |
 | `raw` | Slack's untouched payload, only with `--raw`. |
 
 ## Unread
@@ -100,6 +103,25 @@ Rows come sorted by mentions, then by most recent activity.
 `team_name`, `workspace_url`, `profile` (the configured profile that answered), `enterprise` and
 `enterprise_id` on an enterprise grid, and `writes_allowed`.
 
+## Sent
+
+`send` returns one record.
+
+| Field | Meaning |
+|---|---|
+| `dry_run` | `true` when nothing was sent (`--dry-run`). |
+| `channel`, `channel_name` | Where it went. `channel` is empty in a rehearsal for a DM that does not exist yet. |
+| `ts` | The new message's id. Absent in a dry run. |
+| `thread_ts` | For a reply, the thread's first message — which differs from the `ts` you passed if that was a reply. |
+| `permalink` | Opens the new message. Absent in a dry run. |
+| `text` | Exactly what was, or would be, sent, after escaping. |
+
+## Reacted
+
+`react` returns one record: `dry_run`, `action` (`add` or `remove`), `channel`, `channel_name`,
+`ts`, `name` (the emoji, without colons) and `changed` — `false` when the reaction was already
+there, or already gone, which is still a success.
+
 ## Exit codes
 
 | Exit | `error.code` | Meaning |
@@ -110,8 +132,8 @@ Rows come sorted by mentions, then by most recent activity.
 | 3 | `auth` | Credentials rejected: the token or cookie expired. |
 | 4 | `rate_limited` | Slack rate limit; wait `retry_after` seconds. |
 | 5 | `not_found` | Unknown, ambiguous or inaccessible channel, user or message. |
-| 6 | `network` | Network failure, or `--timeout` elapsed. |
+| 6 | `network` | Network failure, or `--timeout` elapsed. After `send`, the message may still have been posted. |
 | 7 | `config` | Nothing configured, or the config file is unreadable or too permissive. |
-| 8 | `write_refused` | A write was refused: it needs the user's explicit opt-in (`allow_writes`). |
+| 8 | `write_refused` | A write was refused and nothing was sent: writes are off (`allow_writes`), `--yes` was missing, or the text mentions everyone without `--allow-broadcast`. |
 | 9 | `partial` | The run ended early with partial results. |
 | 130 | `interrupted` | Interrupted. |

@@ -69,9 +69,10 @@ npx skills add raulsh/slk           # or for the current project only
 ```
 
 It tells the agent which command answers which question, how to read the envelope, how to keep a
-pull small, and when to stop and hand a dead credential back to you. It works with Claude Code,
-Codex, Cursor and the other agents the `skills` CLI supports: `-a claude-code` targets one, `-y`
-skips the prompts, and `npx skills update` brings it up to date.
+pull small, how to post and reply only when you ask, and when to stop and hand a dead credential
+back to you. It works with Claude Code, Codex, Cursor and the other agents the `skills` CLI
+supports: `-a claude-code` targets one, `-y` skips the prompts, and `npx skills update` brings it
+up to date.
 
 The skill does not install `slk`, and it never fetches credentials: install the binary as above,
 and run `slk configure` yourself.
