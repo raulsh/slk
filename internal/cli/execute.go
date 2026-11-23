@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/raulsh/slk/internal/errdefs"
+	"github.com/raulsh/slk/internal/slack"
 	"golang.org/x/term"
 )
 
@@ -33,6 +34,12 @@ type Env struct {
 	// be tested. Nothing is a terminal in a test, which is also an agent's
 	// case, so the test default and the production-risk case coincide.
 	IsTTY func(f *os.File) bool
+
+	// SlackOptions are applied to every Slack client a command builds. They
+	// exist so a command test can point the client at httptest, and they are
+	// a field rather than an environment variable so that nothing in a real
+	// run can redirect the credentials to another host. main never sets them.
+	SlackOptions []slack.Option
 
 	Version string
 	Commit  string

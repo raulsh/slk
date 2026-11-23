@@ -47,9 +47,9 @@ const header = `# slk credentials and defaults.
 # can read it can act as you in Slack. It must stay mode 0600; slk refuses to
 # read it otherwise.
 #
-# allow_writes gates ` + "`slk send`" + ` and ` + "`slk mark`" + `. It ships false so that an
-# automated caller cannot post to your workspace by accident. Set it true here,
-# or per profile, when you actually want those commands.
+# allow_writes gates the commands that write to Slack (` + "`slk send`" + `). It ships
+# false so that an automated caller cannot post to your workspace by accident.
+# Set it true here, or per profile, when you actually want them.
 `
 
 // Write persists cfg atomically at mode 0600.

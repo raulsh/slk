@@ -122,9 +122,57 @@ It is the one command not meant for an agent — it needs a terminal and never
 terminates on its own — so it refuses to start without one and points at the
 equivalent data commands. Everything it shows is available as JSON.
 
+## Writing to Slack
+
+Writes are off until the person who owns the credentials turns them on, so an
+automated caller cannot post as you by accident:
+
+```yaml
+allow_writes: true        # top level for every profile, or under profiles.<name>
+```
+
+or `SLK_ALLOW_WRITES=1` for a single session. Every write then also needs
+consent for that one call: `--yes`, or a `y` at a terminal. Without either it
+is refused before anything is sent. `--dry-run` resolves everything, prints
+exactly what would be sent, and sends nothing.
+
+```sh
+slk send --channel eng "deploy finished"
+slk send --dm @alice "lunch?"                 # opens a DM if you have none
+slk send --channel eng --yes - < notes.md     # text from stdin, only with "-"
+```
+
+**Replying in a thread.** Every message slk prints carries its `permalink`,
+`channel`, `ts` and `thread_ts`, so an agent can answer anything it read:
+
+```sh
+slk messages --channel eng --since 15m --json   # pick a result
+slk send --thread "$permalink" --yes "on it"     # or: --channel "$channel" --thread "$ts"
+```
+
+Any message of the thread will do, the parent or a reply: slk looks up the
+thread's root first, so the answer never lands in a broken thread, and a
+made-up `ts` fails with exit 5 instead of posting. The result carries the new
+reply's own permalink, so the conversation can continue.
+
+**What gets posted.** Text is literal by default: `&`, `<` and `>` are escaped,
+so code and comparisons arrive as written, while `*bold*`, `` `code` ``, lists
+and links still render. `--markup` sends Slack markup untouched, for mentions
+(`<@U0123ABCD>`) and labelled links, or to send a `text` field from slk's own
+JSON back verbatim. A mention that notifies a whole conversation — `<!here>`,
+`<!channel>`, `<!everyone>`, a user group — also needs `--allow-broadcast`.
+
+Channels are matched exactly: a name that only partly matches is suggested,
+never posted to.
+
+**After a failure.** Exit 8 means the write was refused and nothing was sent.
+Exit 6 — a network failure or a timeout — does not prove the message was not
+posted, so check with `slk messages` or `slk thread` before sending again.
+Writes are never retried automatically.
+
 ## Not built yet
 
-`slk tail` (live RTM stream), `slk send` and `slk mark`.
+`slk tail` (live RTM stream) and `slk mark`.
 
 ## Output for agents
 
@@ -157,9 +205,9 @@ An agent has to branch on failure without parsing prose.
 | 3 | credentials rejected — the token or cookie expired | a human must re-run `slk configure` |
 | 4 | rate-limit budget exhausted | retry after `retry_after` |
 | 5 | unknown or invisible channel, user or message | try another target |
-| 6 | network failure or `--timeout` | retry with backoff |
+| 6 | network failure or `--timeout` | retry with backoff; after a write, check first — it may have landed |
 | 7 | nothing configured, or the config is unreadable | a human must set it up |
-| 8 | a write was refused | it needs explicit opt-in |
+| 8 | a write was refused; nothing was sent | it needs explicit opt-in |
 | 9 | partial results returned, run ended early | use them, or resume from the cursor |
 | 130 | interrupted | — |
 

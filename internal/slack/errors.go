@@ -37,6 +37,7 @@ var slackErrorSentinel = map[string]error{
 	"user_not_found":    errdefs.ErrNotFound,
 	"thread_not_found":  errdefs.ErrNotFound,
 	"message_not_found": errdefs.ErrNotFound,
+	"invalid_thread_ts": errdefs.ErrNotFound,
 
 	"not_in_channel":          errdefs.ErrNotAllowed,
 	"is_archived":             errdefs.ErrNotAllowed,
@@ -44,8 +45,28 @@ var slackErrorSentinel = map[string]error{
 	"restricted_action":       errdefs.ErrNotAllowed,
 	"team_access_not_granted": errdefs.ErrNotAllowed,
 
+	// A post refused because of where it was aimed. The remedy is the same as
+	// for a conversation the user cannot see - another target - so it shares
+	// that classification rather than inventing a new exit code.
+	"cannot_reply_to_message":                  errdefs.ErrNotAllowed,
+	"posting_to_general_channel_denied":        errdefs.ErrNotAllowed,
+	"restricted_action_read_only_channel":      errdefs.ErrNotAllowed,
+	"restricted_action_thread_only_channel":    errdefs.ErrNotAllowed,
+	"restricted_action_non_threadable_channel": errdefs.ErrNotAllowed,
+	"restricted_action_thread_locked":          errdefs.ErrNotAllowed,
+	"messages_tab_disabled":                    errdefs.ErrNotAllowed,
+	"cannot_dm_bot":                            errdefs.ErrNotAllowed,
+	"user_disabled":                            errdefs.ErrNotAllowed,
+
+	// The caller's own mistake in what it asked to send: fix the invocation.
+	"msg_too_long": errdefs.ErrUsage,
+	"no_text":      errdefs.ErrUsage,
+
 	"ratelimited":  errdefs.ErrRateLimited,
 	"rate_limited": errdefs.ErrRateLimited,
+	// A workspace's message quota rather than a per-method rate, but the
+	// remedy - wait and try later - is the same.
+	"message_limit_exceeded": errdefs.ErrRateLimited,
 }
 
 // APIError is a non-ok Slack response.

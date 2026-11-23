@@ -183,6 +183,9 @@ var xReason = map[string]string{
 	"conversations.mark":    "viewed",
 	"users.conversations":   "channel-list",
 	"search.messages":       "search-results",
+	// Writes carry the values that clients driving the web API copy from the
+	// browser's own requests, rather than plausible inventions.
+	"chat.postMessage": "webapp_message_send",
 }
 
 // addEnvelope adds the body half of the client's telemetry parameters.

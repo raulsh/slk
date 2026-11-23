@@ -251,6 +251,15 @@ func TestSlackErrorsMapToSentinels(t *testing.T) {
 		{"not_in_channel", errdefs.ErrNotAllowed},
 		{"is_archived", errdefs.ErrNotAllowed},
 		{"ratelimited", errdefs.ErrRateLimited},
+
+		// Writes: where the post was aimed, what it asked to send, and quota.
+		{"invalid_thread_ts", errdefs.ErrNotFound},
+		{"cannot_reply_to_message", errdefs.ErrNotAllowed},
+		{"posting_to_general_channel_denied", errdefs.ErrNotAllowed},
+		{"restricted_action_read_only_channel", errdefs.ErrNotAllowed},
+		{"msg_too_long", errdefs.ErrUsage},
+		{"no_text", errdefs.ErrUsage},
+		{"message_limit_exceeded", errdefs.ErrRateLimited},
 	}
 
 	for _, tc := range cases {
