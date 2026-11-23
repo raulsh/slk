@@ -28,8 +28,8 @@ With --unread, only threads with replies you have not read, and all of those
 replies. This is how to find a new reply on an old thread: slk messages never
 sees one, because Slack does not return replies with a conversation's history.
 
-Without --unread, each thread comes with the newest replies Slack keeps in the
-view, usually two; slk thread <permalink> reads one in full.
+Without --unread, each thread comes with the few newest replies Slack's view
+keeps with it, not all of them; slk thread <permalink> reads one in full.
 
 Every message carries its permalink, so answering is one more command:
 slk send --thread <permalink> --yes "...". Reading never marks anything read.`,

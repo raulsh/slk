@@ -27,8 +27,8 @@ type FollowedThread struct {
 	Root        output.Message
 	LastRead    slacktime.TS
 	LatestReply slacktime.TS
-	// Latest holds the newest replies the view keeps with each thread - two,
-	// as observed - oldest first.
+	// Latest holds the few newest replies the view keeps with each thread,
+	// oldest first - one to four observed, not every reply.
 	Latest []output.Message
 }
 
