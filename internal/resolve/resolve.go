@@ -39,7 +39,13 @@ var (
 var idPattern = regexp.MustCompile(`^[CDGUWBTS][A-Z0-9]{6,}$`)
 
 // IsID reports whether s is already a Slack id.
-func IsID(s string) bool { return idPattern.MatchString(strings.ToUpper(s)) }
+//
+// The match is case-sensitive on purpose. Slack ids are always upper case,
+// and channel names and handles are always lower case, so case is the only
+// thing that tells them apart: folding it made general, support, security
+// and every other seven-letter name starting with an id prefix look like an
+// id, and sent the request to a channel that does not exist.
+func IsID(s string) bool { return idPattern.MatchString(s) }
 
 // Fetcher is the slice of the Slack client this package needs, declared here
 // in the consumer so a test can supply a fake with no network.
@@ -295,7 +301,7 @@ func displayFor(u output.User) string {
 func (d *Directory) Channel(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if IsID(s) {
-		return strings.ToUpper(s), nil
+		return s, nil
 	}
 	if ch, _, _, err := ParsePermalink(s); err == nil {
 		return ch, nil
@@ -322,7 +328,7 @@ func (d *Directory) Channel(s string) (string, error) {
 func (d *Directory) User(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if IsID(s) {
-		return strings.ToUpper(s), nil
+		return s, nil
 	}
 	want := strings.ToLower(strings.TrimPrefix(s, "@"))
 
@@ -350,8 +356,8 @@ func (d *Directory) User(s string) (string, error) {
 // DM resolves a person to the DM conversation with them.
 func (d *Directory) DM(s string) (string, error) {
 	s = strings.TrimSpace(s)
-	if IsID(s) && strings.HasPrefix(strings.ToUpper(s), "D") {
-		return strings.ToUpper(s), nil
+	if IsID(s) && strings.HasPrefix(s, "D") {
+		return s, nil
 	}
 
 	uid := s
