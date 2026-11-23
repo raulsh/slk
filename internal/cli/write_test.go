@@ -50,6 +50,7 @@ func newFakeSlack(t *testing.T) *fakeSlack {
 			"users.info":            `{"ok":true,"user":{"id":"U444DDDDD","name":"alice"}}`,
 			"conversations.replies": `{"ok":true,"messages":[{"ts":"1725806300.000100","thread_ts":"1725806300.000100","reply_count":2}]}`,
 			"conversations.open":    `{"ok":true,"channel":{"id":"D999ZZZZZ"}}`,
+			"auth.test":             `{"ok":true,"user_id":"U999ZZZZZ","team_id":"T0123ABCD"}`,
 			"reactions.add":         `{"ok":true}`,
 			"reactions.remove":      `{"ok":true}`,
 			"chat.postMessage": `{"ok":true,"channel":"C111AAAAA","ts":"1725806400.123456",
@@ -656,4 +657,84 @@ func TestReactDryRunChangesNothing(t *testing.T) {
 	if r := decodeReacted(t, got).Results[0]; !r.DryRun || r.Channel != "C111AAAAA" {
 		t.Errorf("result = %+v, want a rehearsal aimed at C111AAAAA", r)
 	}
+}
+
+// TestIsReadMethod pins which methods debug call runs without consent: every
+// read slk itself makes, and nothing that writes.
+func TestIsReadMethod(t *testing.T) {
+	cases := map[string]bool{
+		"auth.test":             true,
+		"client.counts":         true,
+		"client.userBoot":       true,
+		"conversations.history": true,
+		"conversations.replies": true,
+		"users.conversations":   true,
+		"users.prefs.get":       true,
+		"users.info":            true,
+		"bots.info":             true,
+		"search.messages":       true,
+		"chat.postMessage":      false,
+		"chat.delete":           false,
+		"conversations.mark":    false,
+		"conversations.open":    false,
+		"reactions.add":         false,
+		"notamethod":            false,
+	}
+	for method, want := range cases {
+		if got := isReadMethod(method); got != want {
+			t.Errorf("isReadMethod(%q) = %v, want %v", method, got, want)
+		}
+	}
+}
+
+// TestDebugCallIsGatedForWrites closes the side door: without the gate, a
+// caller refused by send could make the very same post through debug call.
+func TestDebugCallIsGatedForWrites(t *testing.T) {
+	post := []string{"debug", "call", "chat.postMessage", "channel=C111AAAAA", "text=hi"}
+	cases := []struct {
+		name        string
+		allowWrites bool
+		flags       []string
+		want        int
+		posts       int
+	}{
+		{"writes disabled", false, []string{"--yes"}, errdefs.ExitWriteRefused, 0},
+		{"no terminal and no --yes", true, nil, errdefs.ExitWriteRefused, 0},
+		{"dry run", true, []string{"--dry-run"}, errdefs.ExitOK, 0},
+		{"consented", true, []string{"--yes"}, errdefs.ExitOK, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := writeConfig(t, tc.allowWrites)
+			f := newFakeSlack(t)
+			args := append(append([]string{}, post...), "--config", cfg)
+			args = append(args, tc.flags...)
+
+			got := runAgainst(t, f, strings.NewReader(""), false, args...)
+			if got.code != tc.want {
+				t.Errorf("exit = %d, want %d (stderr: %s)", got.code, tc.want, got.stderr)
+			}
+			if n := f.count("chat.postMessage"); n != tc.posts {
+				t.Errorf("chat.postMessage called %d times, want %d", n, tc.posts)
+			}
+			if tc.posts == 0 && f.total() != 0 {
+				t.Errorf("made %d requests, want none when not calling the method", f.total())
+			}
+		})
+	}
+
+	t.Run("reads stay ungated", func(t *testing.T) {
+		cfg := writeConfig(t, false)
+		f := newFakeSlack(t)
+		f.reply("conversations.history", `{"ok":true,"messages":[]}`)
+
+		got := runAgainst(t, f, strings.NewReader(""), false,
+			"debug", "call", "conversations.history", "channel=C111AAAAA", "--config", cfg)
+		if got.code != errdefs.ExitOK {
+			t.Errorf("exit = %d, want 0 for a read with writes off (stderr: %s)", got.code, got.stderr)
+		}
+		if n := f.count("conversations.history"); n != 1 {
+			t.Errorf("conversations.history called %d times, want 1", n)
+		}
+	})
 }
