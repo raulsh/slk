@@ -260,6 +260,11 @@ func TestSlackErrorsMapToSentinels(t *testing.T) {
 		{"msg_too_long", errdefs.ErrUsage},
 		{"no_text", errdefs.ErrUsage},
 		{"message_limit_exceeded", errdefs.ErrRateLimited},
+		{"invalid_name", errdefs.ErrUsage},
+		{"not_reactable", errdefs.ErrNotAllowed},
+		{"too_many_reactions", errdefs.ErrNotAllowed},
+		{"already_reacted", errNoChange},
+		{"no_reaction", errNoChange},
 	}
 
 	for _, tc := range cases {

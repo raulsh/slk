@@ -15,6 +15,9 @@ var (
 	// ErrLoginPage means Slack served the sign-in page instead of JSON, which
 	// is what a dead cookie looks like.
 	ErrLoginPage = errors.New("slack returned a login page instead of JSON")
+	// errNoChange means a write found the message already in the state it
+	// asked for. It never leaves this package: React turns it into success.
+	errNoChange = errors.New("already in the requested state")
 )
 
 // slackErrorSentinel maps Slack's error strings onto slk's sentinels.
@@ -57,10 +60,20 @@ var slackErrorSentinel = map[string]error{
 	"messages_tab_disabled":                    errdefs.ErrNotAllowed,
 	"cannot_dm_bot":                            errdefs.ErrNotAllowed,
 	"user_disabled":                            errdefs.ErrNotAllowed,
+	"thread_locked":                            errdefs.ErrNotAllowed,
+	"not_reactable":                            errdefs.ErrNotAllowed,
+	"too_many_reactions":                       errdefs.ErrNotAllowed,
+	"too_many_emoji":                           errdefs.ErrNotAllowed,
 
 	// The caller's own mistake in what it asked to send: fix the invocation.
-	"msg_too_long": errdefs.ErrUsage,
-	"no_text":      errdefs.ErrUsage,
+	"msg_too_long":  errdefs.ErrUsage,
+	"no_text":       errdefs.ErrUsage,
+	"invalid_name":  errdefs.ErrUsage,
+	"bad_timestamp": errdefs.ErrUsage,
+
+	// The reaction is already there, or already gone: the state asked for.
+	"already_reacted": errNoChange,
+	"no_reaction":     errNoChange,
 
 	"ratelimited":  errdefs.ErrRateLimited,
 	"rate_limited": errdefs.ErrRateLimited,

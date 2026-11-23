@@ -186,6 +186,8 @@ var xReason = map[string]string{
 	// Writes carry the values that clients driving the web API copy from the
 	// browser's own requests, rather than plausible inventions.
 	"chat.postMessage": "webapp_message_send",
+	"reactions.add":    "changeReactionFromUserAction",
+	"reactions.remove": "changeReactionFromUserAction",
 }
 
 // addEnvelope adds the body half of the client's telemetry parameters.

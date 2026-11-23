@@ -140,6 +140,8 @@ exactly what would be sent, and sends nothing.
 slk send --channel eng "deploy finished"
 slk send --dm @alice "lunch?"                 # opens a DM if you have none
 slk send --channel eng --yes - < notes.md     # text from stdin, only with "-"
+slk react "$permalink" eyes                   # or: slk react eng 1725806400.123456 eyes
+slk react --remove "$permalink" eyes
 ```
 
 **Replying in a thread.** Every message slk prints carries its `permalink`,
@@ -165,10 +167,16 @@ JSON back verbatim. A mention that notifies a whole conversation — `<!here>`,
 Channels are matched exactly: a name that only partly matches is suggested,
 never posted to.
 
+**Reactions** take the same message forms as `slk thread` — a permalink, or a
+channel and a `ts` — and the emoji's Slack name, with or without colons. They
+are idempotent: a reaction that is already there, or one being removed that is
+already gone, succeeds with `"changed": false`.
+
 **After a failure.** Exit 8 means the write was refused and nothing was sent.
 Exit 6 — a network failure or a timeout — does not prove the message was not
 posted, so check with `slk messages` or `slk thread` before sending again.
-Writes are never retried automatically.
+Reactions, being idempotent, are always safe to retry. Writes are never
+retried automatically.
 
 ## Not built yet
 

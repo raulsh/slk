@@ -50,3 +50,51 @@ func (w *Writer) Sent(s Sent) error {
 		return err
 	}
 }
+
+// Reacted is what `react` reports.
+type Reacted struct {
+	DryRun bool `json:"dry_run"`
+	// Action is "add" or "remove".
+	Action      string `json:"action"`
+	Channel     string `json:"channel"`
+	ChannelName string `json:"channel_name,omitempty"`
+	TS          string `json:"ts"`
+	// Name is the emoji's Slack name without colons, the same field a
+	// message's reactions carry.
+	Name string `json:"name"`
+	// Changed is false when the message was already in the requested state -
+	// the reaction was already there, or already gone. That is still a
+	// success, because the outcome asked for holds, and it is what makes a
+	// retry safe. In a dry run nothing changes, so it is false there too.
+	Changed bool `json:"changed"`
+}
+
+// Reacted renders the outcome of a reaction.
+func (w *Writer) Reacted(r Reacted) error {
+	switch w.opts.Mode {
+	case ModeJSON:
+		return w.encode(w.envelope(true, []Reacted{r}, 1, nil))
+	case ModeJSONL:
+		return w.encode(r)
+	default:
+		emoji := ":" + r.Name + ":"
+		msg := displayName(r.ChannelName, r.Channel) + " " + r.TS
+		var line string
+		switch {
+		case r.DryRun && r.Action == "remove":
+			line = "would remove " + emoji + " from " + msg
+		case r.DryRun:
+			line = "would add " + emoji + " to " + msg
+		case r.Action == "remove" && r.Changed:
+			line = "removed " + emoji + " from " + msg
+		case r.Action == "remove":
+			line = emoji + " was not on " + msg
+		case r.Changed:
+			line = "added " + emoji + " to " + msg
+		default:
+			line = emoji + " was already on " + msg
+		}
+		_, err := fmt.Fprintln(w.out, line)
+		return err
+	}
+}

@@ -179,3 +179,54 @@ func TestOpenDM(t *testing.T) {
 		t.Error("OpenDM succeeded on a response with no channel id")
 	}
 }
+
+// TestReact pins both directions on the wire, and the idempotency rule: the
+// requested state already holding is success with no change, never an error.
+func TestReact(t *testing.T) {
+	cases := []struct {
+		name        string
+		remove      bool
+		body        string
+		wantMethod  string
+		wantChanged bool
+		wantErr     error
+	}{
+		{"add", false, `{"ok":true}`, "/api/reactions.add", true, nil},
+		{"remove", true, `{"ok":true}`, "/api/reactions.remove", true, nil},
+		{"already there", false, `{"ok":false,"error":"already_reacted"}`, "/api/reactions.add", false, nil},
+		{"already gone", true, `{"ok":false,"error":"no_reaction"}`, "/api/reactions.remove", false, nil},
+		{"unknown emoji", false, `{"ok":false,"error":"invalid_name"}`, "/api/reactions.add", false, errdefs.ErrUsage},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &formRecorder{body: tc.body}
+			c, _ := newTestClient(t, rec)
+
+			changed, err := c.React(context.Background(), "C123ABCDE", "1725806400.123456", "eyes", tc.remove)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("React error = %v, want errors.Is %v", err, tc.wantErr)
+				}
+			} else if err != nil {
+				t.Fatalf("React: %v", err)
+			}
+			if changed != tc.wantChanged {
+				t.Errorf("changed = %v, want %v", changed, tc.wantChanged)
+			}
+			if rec.path != tc.wantMethod {
+				t.Errorf("path = %q, want %q", rec.path, tc.wantMethod)
+			}
+			want := map[string]string{
+				"channel":   "C123ABCDE",
+				"timestamp": "1725806400.123456",
+				"name":      "eyes",
+				"_x_reason": "changeReactionFromUserAction",
+			}
+			for k, v := range want {
+				if got := rec.form.Get(k); got != v {
+					t.Errorf("form %s = %q, want %q", k, got, v)
+				}
+			}
+		})
+	}
+}

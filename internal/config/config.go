@@ -32,10 +32,10 @@ var (
 type Config struct {
 	DefaultProfile string `yaml:"default_profile"`
 
-	// AllowWrites gates every command that writes to Slack (`send`). False is
-	// the shipped default: a fresh install is read-only until the human who
-	// owns the credentials says otherwise, so an automated caller cannot post
-	// by accident. Deliberately not omitempty - a kill switch nobody can see
+	// AllowWrites gates every command that writes to Slack (`send`, `react`).
+	// False is the shipped default: a fresh install is read-only until the
+	// human who owns the credentials says otherwise, so an automated caller
+	// cannot post by accident. Deliberately not omitempty - a kill switch nobody can see
 	// in the file is one nobody turns on deliberately.
 	AllowWrites bool `yaml:"allow_writes"`
 
