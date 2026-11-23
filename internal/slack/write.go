@@ -74,12 +74,12 @@ func (c *Client) PostMessage(ctx context.Context, o PostOptions) (output.Message
 // ThreadRoot returns the ts of the thread a message belongs to, and in doing
 // so proves the message exists.
 //
-// conversations.replies answers a reply's ts with the whole thread, root
-// first, and an unthreaded message with that message alone. Either way the
-// first message's thread_ts - or, unthreaded, its own ts - is the root. That
-// is what chat.postMessage needs: Slack's guidance is to thread under the
-// root, never under a reply, and a thread_ts that names nothing is not
-// reliably refused.
+// conversations.replies answers a reply's ts with that reply alone, carrying
+// its thread_ts - verified against a real workspace - and a root's ts with the
+// thread, root first. Either way the first message's thread_ts, or for an
+// unthreaded message its own ts, is the root. That is what chat.postMessage
+// needs: Slack's guidance is to thread under the root, never under a reply,
+// and a thread_ts that names nothing is not reliably refused.
 func (c *Client) ThreadRoot(ctx context.Context, channel, ts string) (string, error) {
 	ms, err := c.Replies(ctx, RepliesOptions{Channel: channel, ThreadTS: ts, Limit: 1})
 	if err != nil {
