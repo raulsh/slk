@@ -48,7 +48,10 @@ func newRoot(g *globals) *cobra.Command {
 so it sees your DMs and private channels and needs nobody's approval.
 
 Output is shaped for a caller that pays per token: compact records with names
-already resolved, and nothing but results on stdout.`,
+already resolved, and nothing but results on stdout.
+
+Writing - slk send - is off until the owner of the credentials sets
+allow_writes: true, and every write needs --yes or a confirmation at a terminal.`,
 		SilenceErrors:     true,
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
@@ -93,6 +96,7 @@ already resolved, and nothing but results on stdout.`,
 		newDebugCmd(g),
 		newMessagesCmd(g),
 		newSearchCmd(g),
+		newSendCmd(g),
 		newThreadCmd(g),
 		newUnreadCmd(g),
 		newUsersCmd(g),

@@ -1,8 +1,11 @@
 package resolve
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/raulsh/slk/internal/errdefs"
 	"github.com/raulsh/slk/internal/output"
 )
 
@@ -79,6 +82,49 @@ func TestNamesThatLookLikeIDsResolveByName(t *testing.T) {
 		got, err := d.DM(in)
 		if err != nil || got != "D555EEEEE" {
 			t.Errorf("DM(%q) = %q, %v; want D555EEEEE", in, got, err)
+		}
+	}
+}
+
+// TestChannelExactRefusesWhatOnlyAReadMayGuess pins the write-side rules. Each
+// refused input is one Channel accepts, and each would land a post somewhere
+// the caller did not name.
+func TestChannelExactRefusesWhatOnlyAReadMayGuess(t *testing.T) {
+	d := testDirectory()
+
+	accepted := []struct{ in, want string }{
+		{"general", "C111AAAAA"},
+		{"#General", "C111AAAAA"},
+		{"C333CCCCC", "C333CCCCC"},
+		{"G444DDDDD", "G444DDDDD"},
+		{"D555EEEEE", "D555EEEEE"},
+	}
+	for _, tc := range accepted {
+		got, err := d.ChannelExact(tc.in)
+		if err != nil || got != tc.want {
+			t.Errorf("ChannelExact(%q) = %q, %v; want %q", tc.in, got, err, tc.want)
+		}
+	}
+
+	// Channel takes a lone substring match; a write must not.
+	if got, err := d.Channel("incidents"); err != nil || got != "C333CCCCC" {
+		t.Fatalf("Channel(incidents) = %q, %v; the read-side guess this test contrasts with", got, err)
+	}
+	_, err := d.ChannelExact("incidents")
+	if !errors.Is(err, errdefs.ErrNotFound) {
+		t.Errorf("ChannelExact(incidents) error = %v, want ErrNotFound", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "#eng-incidents") {
+		t.Errorf("ChannelExact(incidents) error = %v, want it to suggest #eng-incidents", err)
+	}
+
+	refusedAsUsage := []string{
+		"U666FFFFF",
+		"https://acme.slack.com/archives/C111AAAAA/p1725806400123456",
+	}
+	for _, in := range refusedAsUsage {
+		if _, err := d.ChannelExact(in); !errors.Is(err, errdefs.ErrUsage) {
+			t.Errorf("ChannelExact(%q) error = %v, want a usage error", in, err)
 		}
 	}
 }

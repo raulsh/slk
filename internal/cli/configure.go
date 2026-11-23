@@ -70,7 +70,7 @@ type.
 	f.StringVar(&o.fromCurl, "from-curl", "", "extract credentials from a DevTools \"Copy as cURL\"; - reads stdin, otherwise a file path")
 	f.BoolVar(&o.readStdin, "stdin", false, "read the whole profile as YAML from stdin")
 	f.BoolVar(&o.setDefault, "set-default", true, "make this the default profile")
-	f.BoolVar(&o.allowWrites, "allow-writes", false, "permit slk send and slk mark for this profile")
+	f.BoolVar(&o.allowWrites, "allow-writes", false, "permit the commands that write to Slack (slk send) for this profile")
 	f.BoolVar(&o.noVerify, "no-verify", false, "skip the live credential check after writing")
 	f.BoolVar(&o.force, "force", false, "overwrite an existing profile without confirming")
 
@@ -132,7 +132,7 @@ func (g *globals) runConfigure(cmd *cobra.Command, o *configureOpts) error {
 
 	note(g.env.Stderr, fmt.Sprintf("wrote profile %q from %s to %s (mode 0600)", name, source, path))
 	if !o.allowWrites && !cfg.AllowWrites {
-		note(g.env.Stderr, "writes are disabled; `slk send` and `slk mark` need allow_writes: true")
+		note(g.env.Stderr, "writes are disabled; `slk send` needs allow_writes: true")
 	}
 
 	// Verification needs the transport, which does not exist yet. Say so

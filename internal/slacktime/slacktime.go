@@ -12,6 +12,7 @@ package slacktime
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,32 @@ func Parse(s string) (TS, error) {
 		}
 	}
 	return TS{micros: sec*1e6 + micros}, nil
+}
+
+// strictPattern is the two forms a message's identity is actually handed
+// around in: the wire form with all six fractional digits, and the p-prefixed
+// form from an archive URL.
+var strictPattern = regexp.MustCompile(`^(\d{10}\.\d{6}|p\d{16})$`)
+
+// ParseStrict reads a ts that is about to name a message for a write.
+//
+// Parse is forgiving because a read uses a ts as a time bound, where
+// 1725806400 and 1725806400.000000 are the same instant. A write uses it as an
+// identity, and there the same padding turns a truncated id into a different
+// message, so only the complete wire form and the permalink form are accepted.
+func ParseStrict(s string) (TS, error) {
+	s = strings.TrimSpace(s)
+	if !strictPattern.MatchString(s) {
+		return TS{}, fmt.Errorf("%q is not a message timestamp; write it like 1725806400.123456 or p1725806400123456", s)
+	}
+	t, err := Parse(s)
+	if err != nil {
+		return TS{}, err
+	}
+	if t.IsZero() {
+		return TS{}, fmt.Errorf("%q is the zero timestamp, which names no message", s)
+	}
+	return t, nil
 }
 
 // MustParse is for tests and constants.

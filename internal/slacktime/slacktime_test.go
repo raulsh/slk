@@ -306,3 +306,36 @@ func contains(s, sub string) bool {
 		return false
 	})()
 }
+
+// TestParseStrict pins what a write accepts as a message id. Parse pads a bare
+// integer, which is right for a time bound and wrong for an identity: a
+// truncated ts would aim the write at a different message.
+func TestParseStrict(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"1725806400.123456", "1725806400.123456", false},
+		{" 1725806400.123456 ", "1725806400.123456", false},
+		{"p1725806400123456", "1725806400.123456", false},
+		{"1725806400", "", true},
+		{"1725806400.12345", "", true},
+		{"1725806400.1234567", "", true},
+		{"p172580640012345", "", true},
+		{"0000000000.000000", "", true},
+		{"", "", true},
+		{"yesterday", "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			got, err := ParseStrict(tc.in)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ParseStrict(%q) error = %v, wantErr %v", tc.in, err, tc.wantErr)
+			}
+			if got.String() != tc.want {
+				t.Errorf("ParseStrict(%q) = %q, want %q", tc.in, got.String(), tc.want)
+			}
+		})
+	}
+}

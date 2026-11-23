@@ -306,9 +306,53 @@ func (d *Directory) Channel(s string) (string, error) {
 	if ch, _, _, err := ParsePermalink(s); err == nil {
 		return ch, nil
 	}
+	exact, partial := d.matchChannels(s)
+	return pick(s, exact, partial, d)
+}
 
+// ChannelExact resolves the channel a write will land in.
+//
+// It is stricter than Channel in three ways, each harmless on a read and a
+// post to the wrong audience on a write. A lone substring match is offered,
+// never taken, so eng cannot land in #eng-incidents. A permalink is refused,
+// because it names a message and posting beside it would silently drop the
+// thread it was meant for. And only conversation ids pass through, because
+// Slack treats a user id here as "message this person", which is a different
+// request with a different audience.
+func (d *Directory) ChannelExact(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if IsID(s) {
+		switch s[0] {
+		case 'C', 'G', 'D':
+			return s, nil
+		default:
+			return "", errdefs.Usagef("%s is not a conversation id (C…, G… or D…)", s)
+		}
+	}
+	if _, _, _, err := ParsePermalink(s); err == nil {
+		return "", errdefs.Usagef("%q names a message, not a channel", s)
+	}
+
+	exact, partial := d.matchChannels(s)
+	switch {
+	case len(exact) == 1:
+		return exact[0].ID, nil
+	case len(exact) > 1:
+		return "", fmt.Errorf("%w: %q %w: %s", errdefs.ErrNotFound, s, ErrAmbiguous, names(exact, d))
+	case len(partial) > 0:
+		return "", fmt.Errorf("%w: %w %q exactly; did you mean %s?",
+			errdefs.ErrNotFound, ErrNoMatch, s, names(nearMisses(partial), d))
+	default:
+		return "", fmt.Errorf("%w: %w %q; try `slk conversations list --name %s`",
+			errdefs.ErrNotFound, ErrNoMatch, s, strings.TrimPrefix(s, "#"))
+	}
+}
+
+// matchChannels splits the non-DM conversations into exact and substring
+// matches for a typed name, so Channel and ChannelExact cannot disagree about
+// what matched - only about what to do with it.
+func (d *Directory) matchChannels(s string) (exact, partial []output.Conversation) {
 	want := strings.ToLower(strings.TrimPrefix(s, "#"))
-	var exact, partial []output.Conversation
 	for _, c := range d.Conversations {
 		if c.Type == "dm" {
 			continue
@@ -321,7 +365,7 @@ func (d *Directory) Channel(s string) (string, error) {
 			partial = append(partial, c)
 		}
 	}
-	return pick(s, exact, partial, d)
+	return exact, partial
 }
 
 // User resolves a user target to a user id.
@@ -390,14 +434,20 @@ func pick(input string, exact, partial []output.Conversation, d *Directory) (str
 		return partial[0].ID, nil
 	}
 	if len(partial) > 1 {
-		sort.Slice(partial, func(i, j int) bool { return partial[i].Name < partial[j].Name })
-		if len(partial) > 8 {
-			partial = partial[:8]
-		}
-		return "", fmt.Errorf("%w: %q %w: %s", errdefs.ErrNotFound, input, ErrAmbiguous, names(partial, d))
+		return "", fmt.Errorf("%w: %q %w: %s", errdefs.ErrNotFound, input, ErrAmbiguous, names(nearMisses(partial), d))
 	}
 	return "", fmt.Errorf("%w: %w %q; try `slk conversations list --name %s`",
 		errdefs.ErrNotFound, ErrNoMatch, input, strings.TrimPrefix(input, "#"))
+}
+
+// nearMisses orders substring matches by name and keeps the first few, which
+// is as many as an error message can usefully suggest.
+func nearMisses(partial []output.Conversation) []output.Conversation {
+	sort.Slice(partial, func(i, j int) bool { return partial[i].Name < partial[j].Name })
+	if len(partial) > 8 {
+		partial = partial[:8]
+	}
+	return partial
 }
 
 func names(cs []output.Conversation, d *Directory) string {
