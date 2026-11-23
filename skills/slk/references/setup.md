@@ -1,7 +1,7 @@
 # Installing and configuring slk
 
-Read this when `slk` is not on PATH, or a call exits 7 (nothing configured) or 3 (credentials
-expired).
+Read this when `slk` is not on PATH, or a call exits 7 (nothing configured), 3 (credentials
+expired) or 8 because writes are off.
 
 ## Installing the binary
 
@@ -48,6 +48,17 @@ The file lives at `slk config path` (normally `~/.config/slk/config.yaml`). slk 
 unless it is mode 0600, and reports any invalid field by name; either way `error.hint` and
 `error.message` say exactly what to change. Never bypass the permission check with
 `SLK_INSECURE_CONFIG_PERMS`.
+
+## Turning on writes: also the user's call
+
+Posting and reacting are off until the user allows them, so an agent cannot speak for them by
+accident. Give them the choice, and these steps if they want it:
+
+- In the file at `slk config path`, set `allow_writes: true` — at the top level for every
+  workspace, or under `profiles.<name>` for one.
+- Or, for a single session, export `SLK_ALLOW_WRITES=1` in their own shell.
+
+Never make either change yourself.
 
 ## Several workspaces
 
