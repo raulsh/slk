@@ -75,6 +75,11 @@ var slackErrorSentinel = map[string]error{
 	"already_reacted": errNoChange,
 	"no_reaction":     errNoChange,
 
+	// An Enterprise Grid refusing a method outright for an org-level session.
+	// Not a permission the user lacks: the same data is reachable through the
+	// client.* endpoints, so this means "use the fallback".
+	"enterprise_is_restricted": errdefs.ErrUnsupported,
+
 	"ratelimited":  errdefs.ErrRateLimited,
 	"rate_limited": errdefs.ErrRateLimited,
 	// A workspace's message quota rather than a per-method rate, but the

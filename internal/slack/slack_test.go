@@ -251,6 +251,7 @@ func TestSlackErrorsMapToSentinels(t *testing.T) {
 		{"not_in_channel", errdefs.ErrNotAllowed},
 		{"is_archived", errdefs.ErrNotAllowed},
 		{"ratelimited", errdefs.ErrRateLimited},
+		{"enterprise_is_restricted", errdefs.ErrUnsupported},
 
 		// Writes: where the post was aimed, what it asked to send, and quota.
 		{"invalid_thread_ts", errdefs.ErrNotFound},
@@ -405,5 +406,49 @@ func TestContextCancellationIsNotReportedAsSlackFailure(t *testing.T) {
 	}
 	if errors.Is(err, errdefs.ErrAuth) {
 		t.Errorf("a cancelled call was reported as an auth failure: %v", err)
+	}
+}
+
+// TestConversationsFallsBackToUserBoot covers an Enterprise Grid that refuses
+// users.conversations outright: the list must come from client.userBoot
+// instead of failing every command that needs the directory.
+func TestConversationsFallsBackToUserBoot(t *testing.T) {
+	boot := `{"ok":true,
+		"channels":[
+			{"id":"C1","name":"eng","is_channel":true},
+			{"id":"G1","name":"secret","is_channel":true,"is_private":true},
+			{"id":"G2","name":"mpdm-alice--bob-1","is_mpim":true,"is_private":true},
+			{"id":"C2","name":"old","is_channel":true,"is_archived":true}],
+		"ims":[{"id":"D1","is_im":true,"user":"U1"}]}`
+
+	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/users.conversations"):
+			_, _ = w.Write([]byte(`{"ok":false,"error":"enterprise_is_restricted"}`))
+		case strings.HasSuffix(r.URL.Path, "/client.userBoot"):
+			_, _ = w.Write([]byte(boot))
+		default:
+			t.Errorf("unexpected call to %s", r.URL.Path)
+		}
+	}))
+
+	got, err := c.Conversations(context.Background(), ConversationsOptions{ExcludeArchived: true})
+	if err != nil {
+		t.Fatalf("Conversations: %v", err)
+	}
+	want := map[string]string{"C1": "channel", "G1": "private", "G2": "mpim", "D1": "dm"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d conversations, want %d: %+v", len(got), len(want), got)
+	}
+	for _, cv := range got {
+		if want[cv.ID] != cv.Type {
+			t.Errorf("%s: type = %q, want %q", cv.ID, cv.Type, want[cv.ID])
+		}
+	}
+
+	dms, err := c.Conversations(context.Background(), ConversationsOptions{Types: []string{"im"}})
+	if err != nil || len(dms) != 1 || dms[0].User != "U1" {
+		t.Errorf("Types=im: got %+v, err %v; want the one DM", dms, err)
 	}
 }

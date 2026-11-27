@@ -3,11 +3,14 @@ package slack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/raulsh/slk/internal/errdefs"
 	"github.com/raulsh/slk/internal/output"
 	"github.com/raulsh/slk/internal/slacktime"
 )
@@ -64,6 +67,18 @@ func (c *Client) Conversations(ctx context.Context, o ConversationsOptions) ([]o
 		types = []string{"public_channel", "private_channel", "mpim", "im"}
 	}
 
+	out, err := c.usersConversations(ctx, types, o)
+	if errors.Is(err, errdefs.ErrUnsupported) {
+		// An Enterprise Grid can refuse users.conversations for an org-level
+		// session (enterprise_is_restricted). client.userBoot is what the web
+		// client itself builds its sidebar from, and it is one request.
+		c.log.Debug("users.conversations unavailable; falling back to client.userBoot", "error", err)
+		return c.bootConversations(ctx, types, o)
+	}
+	return out, err
+}
+
+func (c *Client) usersConversations(ctx context.Context, types []string, o ConversationsOptions) ([]output.Conversation, error) {
 	var out []output.Conversation
 	cursor := ""
 	for page := 0; page < maxPages; page++ {
@@ -101,6 +116,52 @@ func (c *Client) Conversations(ctx context.Context, o ConversationsOptions) ([]o
 		cursor = next
 	}
 	return out, nil
+}
+
+// bootConversations lists the user's conversations from client.userBoot.
+//
+// Verified against a real Grid: channels carries public, private and group-DM
+// conversations together, ims carries the DMs, and the set matches what
+// users.conversations returned before the org restricted it. Two differences:
+// archived conversations are absent, and num_members is not reported.
+func (c *Client) bootConversations(ctx context.Context, types []string, o ConversationsOptions) ([]output.Conversation, error) {
+	var resp struct {
+		Channels []rawConversation `json:"channels"`
+		IMs      []rawConversation `json:"ims"`
+	}
+	if err := c.call(ctx, "client.userBoot", nil, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Channels == nil && resp.IMs == nil {
+		return nil, fmt.Errorf("client.userBoot: %w: response carried no channels or ims",
+			errdefs.ErrUnsupported)
+	}
+
+	var out []output.Conversation
+	for _, rc := range append(resp.Channels, resp.IMs...) {
+		if !slices.Contains(types, rc.slackType()) || o.ExcludeArchived && rc.IsArchived {
+			continue
+		}
+		out = append(out, rc.toOutput())
+		if o.Limit > 0 && len(out) >= o.Limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+// slackType is the name Slack's own types parameter uses for a conversation.
+func (rc rawConversation) slackType() string {
+	switch rc.kind() {
+	case "dm":
+		return "im"
+	case "mpim":
+		return "mpim"
+	case "private":
+		return "private_channel"
+	default:
+		return "public_channel"
+	}
 }
 
 func (rc rawConversation) toOutput() output.Conversation {
