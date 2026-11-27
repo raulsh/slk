@@ -1,4 +1,4 @@
-VERSION ?= 0.2.0
+VERSION ?= 0.2.1
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 
 PKG := slk
